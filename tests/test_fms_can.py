@@ -7,7 +7,8 @@ import unittest
 from fms_can import CAN_OBJ, INIT_CONFIG, EngineTransmitter, GcanInterface, engine_frames
 
 VALUES = {'RPM': 1250, 'Oil temp': 88, 'Oil pressure': 4.2,
-          'Coolant temp': 85, 'Coolant pressure': 1.5}
+          'Coolant temp': 85, 'Coolant pressure': 1.5,
+          'Wheel based speed': 60, 'Engine running time': 300}
 
 
 def wait_until(predicate, timeout=2):
@@ -25,17 +26,33 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(frames[61444], bytes.fromhex('FF FF FF 10 27 FF FF FF'))
         self.assertEqual(frames[65262], bytes.fromhex('7D FF 20 2D FF FF FF FF'))
         self.assertEqual(frames[65263], bytes.fromhex('FF FF FF 69 FF FF 4B FF'))
+        self.assertEqual(frames[65265], bytes.fromhex('FF 00 3C FF FF FF FF FF'))
+        self.assertEqual(frames[65253], bytes.fromhex('70 17 00 00 FF FF FF FF'))
 
     def test_slider_limits(self):
         low = engine_frames(dict.fromkeys(VALUES, 0))
         self.assertEqual(low[61444][3:5], b'\x00\x00')
         self.assertEqual(low[65262][0], 40)
         self.assertEqual(int.from_bytes(low[65262][2:4], 'little'), 8736)
+        self.assertEqual(low[65265][1:3], bytes(2))
+        self.assertEqual(low[65253][:4], bytes(4))
         high = engine_frames({'RPM': 4000, 'Oil temp': 160, 'Oil pressure': 10,
-                              'Coolant temp': 130, 'Coolant pressure': 4})
+                              'Coolant temp': 130, 'Coolant pressure': 4,
+                              'Wheel based speed': 120, 'Engine running time': 5000})
         self.assertEqual(int.from_bytes(high[61444][3:5], 'little'), 32000)
         self.assertEqual(high[65263][3], 250)
         self.assertEqual(high[65263][6], 200)
+        self.assertEqual(int.from_bytes(high[65265][1:3], 'little'), 30720)
+        self.assertEqual(int.from_bytes(high[65253][:4], 'little'), 100000)
+
+    def test_new_signals_clamp_and_resolution(self):
+        for speed, hours, speed_raw, hours_raw in (
+                (-10, -1, 0, 0), (150, 6000, 30720, 100000),
+                (60.5, 300.05, 15488, 6001)):
+            frames = engine_frames(dict(VALUES, **{
+                'Wheel based speed': speed, 'Engine running time': hours}))
+            self.assertEqual(int.from_bytes(frames[65265][1:3], 'little'), speed_raw)
+            self.assertEqual(int.from_bytes(frames[65253][:4], 'little'), hours_raw)
 
     def test_windows_abi(self):
         self.assertEqual(ctypes.sizeof(CAN_OBJ), 24)
@@ -123,15 +140,19 @@ class WorkerTests(unittest.TestCase):
             wait_until(lambda: interface.recovered)
             self.assertTrue(worker.thread.is_alive())
             self.assertGreater(interface.attempts, 10)
-            updated = dict(VALUES, RPM=2000)
+            updated = dict(VALUES, RPM=2000, **{'Wheel based speed': 90,
+                                               'Engine running time': 450})
             worker.update(updated)
             interface.fail.clear()
             wait_until(lambda: {frame[0] for frame in interface.sent} ==
-                       {0x0CF00400, 0x18FEEE00, 0x18FEEF00})
+                       {0x0CF00400, 0x18FEEE00, 0x18FEEF00, 0x18FEF100, 0x18FEE500})
             wait_until(lambda: worker.status()[0] == 'connected')
             rpm_frames = [payload for identifier, payload, _ in interface.sent
                           if identifier == 0x0CF00400]
             self.assertEqual(rpm_frames[-1][3:5], (16000).to_bytes(2, 'little'))
+            payloads = {identifier: payload for identifier, payload, _ in interface.sent}
+            self.assertEqual(payloads[0x18FEF100][1:3], (23040).to_bytes(2, 'little'))
+            self.assertEqual(payloads[0x18FEE500][:4], (9000).to_bytes(4, 'little'))
             count = len(rpm_frames)
             wait_until(lambda: sum(frame[0] == 0x0CF00400 for frame in interface.sent) >= count + 3)
         finally:

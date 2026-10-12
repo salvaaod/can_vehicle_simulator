@@ -22,7 +22,8 @@ class INIT_CONFIG(ctypes.Structure):
 
 
 # PGN, priority, period (seconds). Source address 0 = engine #1.
-ENGINE_MESSAGES = ((61444, 3, 0.020), (65262, 6, 1.000), (65263, 6, 0.500))
+ENGINE_MESSAGES = ((61444, 3, 0.020), (65262, 6, 1.000), (65263, 6, 0.500),
+                   (65265, 6, 0.100), (65253, 6, 1.000))
 
 
 def engine_frames(values):
@@ -37,7 +38,14 @@ def engine_frames(values):
     eflp1 = bytearray(b'\xff' * 8)
     eflp1[3] = round(max(0, min(10, values['Oil pressure'])) / 0.04)  # SPN 100
     eflp1[6] = round(max(0, min(4, values['Coolant pressure'])) / 0.02)  # SPN 109
-    return {61444: bytes(eec1), 65262: bytes(et1), 65263: bytes(eflp1)}
+    ccvs = bytearray(b'\xff' * 8)
+    speed = round(max(0, min(120, values['Wheel based speed'])) * 256)
+    ccvs[1:3] = speed.to_bytes(2, 'little')  # SPN 84, bytes 2-3, 1/256 km/h
+    hours = bytearray(b'\xff' * 8)
+    running_time = round(max(0, min(5000, values['Engine running time'])) / 0.05)
+    hours[0:4] = running_time.to_bytes(4, 'little')  # SPN 247, bytes 1-4
+    return {61444: bytes(eec1), 65262: bytes(et1), 65263: bytes(eflp1),
+            65265: bytes(ccvs), 65253: bytes(hours)}
 
 
 class GcanInterface:
