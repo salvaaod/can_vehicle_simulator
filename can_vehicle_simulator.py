@@ -2,6 +2,7 @@
 import math
 import tkinter as tk
 from tkinter import ttk
+from fms_can import EngineTransmitter
 
 WIDTH, HEIGHT = 1000, 540
 GROUND_Y = 415
@@ -298,6 +299,62 @@ for row, (key, lo, hi, unit, digits) in enumerate([
 
 for col in range(3):
     controls.columnconfigure(col, weight=1)
+
+can_panel = ttk.Frame(root, padding=(14, 0, 14, 10))
+can_panel.pack(fill='x')
+can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 · 250 kbps')
+transmitter = None
+closing = False
+
+
+def engine_snapshot():
+    return {key: variable.get() for key, variable in engine.items()}
+
+
+def toggle_can():
+    global transmitter
+    if transmitter is not None and transmitter.thread.is_alive():
+        transmitter.stop()
+        connect_button.configure(state='disabled')
+        can_status.set('Disconnecting…')
+    else:
+        transmitter = EngineTransmitter(engine_snapshot())
+        transmitter.start()
+        connect_button.configure(text='Disconnect GCAN-II')
+        can_status.set('Connecting to GCAN-II…')
+
+
+def poll_can():
+    if transmitter is not None:
+        transmitter.update(engine_snapshot())
+        state, message = transmitter.status()
+        if transmitter.thread.is_alive():
+            if connect_button['state'] != 'disabled':
+                can_status.set(message)
+        else:
+            can_status.set(message)
+            connect_button.configure(text='Connect GCAN-II', state='normal')
+    if closing:
+        if transmitter is None or not transmitter.thread.is_alive():
+            root.destroy()
+            return
+    root.after(50, poll_can)
+
+
+def close_window():
+    global closing
+    closing = True
+    connect_button.configure(state='disabled')
+    if transmitter is not None:
+        transmitter.stop()
+    # Poll for worker cleanup without blocking Tk or closing the DLL during a send.
+
+
+connect_button = ttk.Button(can_panel, text='Connect GCAN-II', command=toggle_can)
+connect_button.pack(side='left', padx=(0, 12))
+ttk.Label(can_panel, textvariable=can_status, wraplength=850).pack(side='left')
+root.protocol('WM_DELETE_WINDOW', close_window)
+root.after(50, poll_can)
 
 # Ask Tkinter for the height actually needed by the canvas and three control panels.
 # Start with a tightly fitted window, rather than a fixed 800 px tall one.
