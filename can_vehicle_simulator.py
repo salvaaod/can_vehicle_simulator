@@ -23,6 +23,8 @@ engine = {
     'Oil pressure': tk.DoubleVar(value=4.2),
     'Coolant temp': tk.DoubleVar(value=85),
     'Coolant pressure': tk.DoubleVar(value=1.5),
+    'Wheel based speed': tk.DoubleVar(value=60),
+    'Engine running time': tk.DoubleVar(value=300),
 }
 
 # Tire telemetry is kept separately for each wheel (bar and degrees Celsius).
@@ -176,17 +178,22 @@ def draw():
         ('Oil pressure', 0, 10, 'bar', 2, 1),  # Low values are warning/critical
         ('Coolant temp', 0, 130, '°C', 105, 115),
         ('Coolant pressure', 0, 4, 'bar', 1.0, 1.0),
+        ('Wheel based speed', 0, 120, 'km/h', None, None),
+        ('Engine running time', 0, 5000, 'h', None, None),
     ]
     for i, (key, low, high, unit, warning, critical) in enumerate(rows):
-        y = 351 + 36*i
+        y = 345 + 26*i
         v = engine[key].get()
-        if key == 'Oil pressure':
+        if warning is None:
+            color = '#2b9c67'
+        elif key == 'Oil pressure':
             color = '#c0392b' if v <= critical else '#dc9a23' if v <= warning else '#2b9c67'
         elif key == 'Coolant pressure':
             color = '#c0392b' if v < 1.0 else '#2b9c67'
         else:
             color = '#c0392b' if v >= critical else '#dc9a23' if v >= warning else '#2b9c67'
-        canvas.create_text(791, y, text=key, anchor='w', fill='#364d60', font=('Arial', 9))
+        label = 'Running time' if key == 'Engine running time' else key
+        canvas.create_text(791, y, text=label, anchor='w', fill='#364d60', font=('Arial', 9))
         canvas.create_text(987, y, text=f'{v:.1f} {unit}' if 'pressure' in key.lower() else f'{v:.0f} {unit}',
                            anchor='e', fill=color, font=('Arial', 9, 'bold'))
         canvas.create_rectangle(791, y+11, 986, y+19, fill='#e4ebf0', outline='')
@@ -294,8 +301,11 @@ for row, (key, lo, hi, unit, digits) in enumerate([
     ('Oil pressure', 0, 10, 'bar', 1),
     ('Coolant temp', 0, 130, '°C', 0),
     ('Coolant pressure', 0, 4, 'bar', 1),
+    ('Wheel based speed', 0, 120, 'km/h', 0),
+    ('Engine running time', 0, 5000, 'h', 0),
 ]):
-    metric_slider(engine_panel, row, key, engine[key], lo, hi, unit, digits, slider_width=110)
+    label = 'Running time' if key == 'Engine running time' else key
+    metric_slider(engine_panel, row, label, engine[key], lo, hi, unit, digits, slider_width=110)
 
 for col in range(3):
     controls.columnconfigure(col, weight=1)

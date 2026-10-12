@@ -22,8 +22,11 @@ same source address on that bus.
 | EEC1 | 61444 (`F004`) | `0CF00400` | 20 ms | Engine speed, SPN 190, bytes 4–5, 0.125 rpm/bit |
 | ET1 | 65262 (`FEEE`) | `18FEEE00` | 1000 ms | Coolant temperature, SPN 110, byte 1, 1 °C/bit, offset −40 °C; oil temperature, SPN 175, bytes 3–4, 0.03125 °C/bit, offset −273 °C |
 | EFL/P1 | 65263 (`FEEF`) | `18FEEF00` | 500 ms | Oil pressure, SPN 100, byte 4, 4 kPa/bit; coolant pressure, SPN 109, byte 7, 2 kPa/bit |
+| CCVS | 65265 (`FEF1`) | `18FEF100` | 100 ms | Wheel based speed, SPN 84, bytes 2–3, 1/256 km/h/bit |
+| HOURS | 65253 (`FEE5`) | `18FEE500` | 1000 ms | Engine total hours of operation, SPN 247, bytes 1–4, 0.05 h/bit |
 
-Engine speed and coolant temperature are FMS signals. Oil temperature and the
+Engine speed, coolant temperature, wheel based speed, and engine running time
+are FMS signals. Oil temperature and the
 pressure signals use their standard J1939 definitions as supplementary engine
 telemetry; an FMS-only receiver may ignore them. This does not emulate other
 FMS signals that the UI does not supply.
@@ -33,6 +36,13 @@ For the default sliders, the payloads are:
 - EEC1: `FF FF FF 10 27 FF FF FF`
 - ET1: `7D FF 20 2D FF FF FF FF`
 - EFL/P1: `FF FF FF 69 FF FF 4B FF`
+- CCVS: `FF 00 3C FF FF FF FF FF`
+- HOURS: `70 17 00 00 FF FF FF FF`
+
+Wheel based speed ranges from 0–120 km/h (default 60 km/h). Engine running time
+ranges from 0–5000 h (default 300 h); it is a manually simulated accumulated
+running time, not an automatically advancing timer. Both use the existing compact
+engine slider style and update the engine's live parameter gauges.
 
 Transmission runs in a worker thread. Failed sends (including exceptions) are
 retried every 20 ms using current slider values. If failures persist, CAN1 is
