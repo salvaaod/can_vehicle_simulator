@@ -2,7 +2,7 @@
 import math
 import tkinter as tk
 from tkinter import ttk
-from fms_can import EngineTransmitter
+from crane_can import VehicleTransmitter
 
 WIDTH, HEIGHT = 1000, 540
 GROUND_Y = 415
@@ -312,13 +312,15 @@ for col in range(3):
 
 can_panel = ttk.Frame(root, padding=(14, 0, 14, 10))
 can_panel.pack(fill='x')
-can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 · 250 kbps')
+can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 engine + CAN2 crane · 250 kbps')
 transmitter = None
 closing = False
 
 
 def engine_snapshot():
-    return {key: variable.get() for key, variable in engine.items()}
+    return {**{key: variable.get() for key, variable in engine.items()},
+            'angle': angle.get(), 'extension': extension.get(),
+            'pressure': pressure.get(), 'slew': slew.get(), 'load_kg': load_kg.get()}
 
 
 def toggle_can():
@@ -328,7 +330,7 @@ def toggle_can():
         connect_button.configure(state='disabled')
         can_status.set('Disconnecting…')
     else:
-        transmitter = EngineTransmitter(engine_snapshot())
+        transmitter = VehicleTransmitter(engine_snapshot())
         transmitter.start()
         connect_button.configure(text='Disconnect GCAN-II')
         can_status.set('Connecting to GCAN-II…')
