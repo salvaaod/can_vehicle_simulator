@@ -46,4 +46,6 @@ class VehicleTransmitter(EngineTransmitter):
     def send_frame(self, interface, key, priority, payload):
         if priority is None:
             return interface.send(key, payload, channel=1, extended=False)
-        return super().send_frame(interface, key, priority, payload)
+        # Select CAN1 explicitly: never inherit an interface's default channel.
+        return interface.send((priority << 26) | (key << 8), payload,
+                              channel=0, extended=True)

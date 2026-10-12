@@ -4,7 +4,7 @@ import unittest
 
 from crane_can import VehicleInterface, VehicleTransmitter, crane_frames
 import test_fms_can as fms_tests
-from fms_can import CAN_OBJ
+from fms_can import CAN_OBJ, ENGINE_MESSAGES
 
 FakeInterface = fms_tests.FakeInterface
 VALUES = fms_tests.VALUES
@@ -67,6 +67,26 @@ class CraneTests(unittest.TestCase):
         self.assertFalse(driver.opened)
         self.assertEqual(calls.count(('close',)), 1)
 
+    def test_every_message_selects_its_physical_channel(self):
+        driver, calls = fms_tests.DriverTests().interface()
+        # A CAN2 default must not redirect FMS traffic to that bus.
+        driver.channel = 1
+        worker = VehicleTransmitter({**VALUES, **CRANE})
+        payloads = worker.frames({**VALUES, **CRANE})
+        for key, priority, _period in worker.messages:
+            worker.send_frame(driver, key, priority, payloads[key])
+        sends = [call for call in calls if call[0] == 'send']
+        self.assertEqual(len(sends), len(worker.messages))
+        engine_ids = {(priority << 26) | (key << 8)
+                      for key, priority, _ in ENGINE_MESSAGES}
+        for call in sends:
+            channel, identifier, extended = call[3], call[5], call[6]
+            if identifier in engine_ids:
+                self.assertEqual((channel, extended), (0, 1))
+            else:
+                self.assertIn(identifier, {0x181, 0x281, 0x701})
+                self.assertEqual((channel, extended), (1, 0))
+
     def test_live_periodic_crane_transmission(self):
         class DualFake(FakeInterface):
             def send(self, identifier, payload, channel=0, extended=True):
@@ -81,6 +101,7 @@ class CraneTests(unittest.TestCase):
                              {0x0CF00400, 0x18FEEE00, 0x18FEEF00, 0x18FEF100,
                               0x18FEE500, 0x181, 0x281, 0x701})
             self.assertTrue(all(f[2:] == (1, False) for f in driver.sent if f[0] < 0x800))
+            self.assertTrue(all(f[2:] == (0, True) for f in driver.sent if f[0] >= 0x800))
             worker.update({**VALUES, **CRANE, 'load_kg': 5000})
             wait_until(lambda: any(f[0] == 0x281 and f[1] == bytes.fromhex('88 13')
                                    for f in driver.sent))

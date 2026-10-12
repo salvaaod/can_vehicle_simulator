@@ -141,3 +141,16 @@ Physical transmission requires Windows, the GCAN driver, and a matching
 Python/DLL architecture. Hardware bus operation has not been verified in this
 Linux workspace. Confirm a capture on CAN2 shows standard IDs `181`, `281`,
 and `701`, while CAN1 retains the engine frames.
+
+Every vehicle send selects its channel explicitly: FMS uses channel `0` with
+extended frames; crane PDOs and heartbeat use channel `1` with standard frames.
+The routing regression test verifies every identifier at the DLL boundary even
+when the interface default is set to CAN2.
+
+For a hardware isolation check, clear the capture and monitor each physical bus
+separately. CAN1 should contain only `0CF00400`, `18FEEE00`, `18FEEF00`,
+`18FEF100`, and `18FEE500`; CAN2 should contain only `181`, `281`, and `701`
+from this simulator. The two outputs must not share CAN-H/CAN-L wiring. Check
+that any adapter/tool forwarding or bridge mode is disabled. Receive entries
+identify traffic observed on a bus, but do not identify which sender or bridge
+put it there.
