@@ -50,6 +50,7 @@ def engine_frames(values):
 
 class GcanInterface:
     device_type, device_index, channel = 4, 0, 0  # USBCAN-II, first device, CAN1
+    channels = (0,)
 
     def __init__(self):
         if os.name != 'nt':
@@ -77,27 +78,29 @@ class GcanInterface:
         self.opened = True
         try:
             config = INIT_CONFIG(0, 0xFFFFFFFF, 0, 0, 0x01, 0x1C, 0)
-            if self.dll.InitCAN(self.device_type, self.device_index, self.channel, ctypes.byref(config)) != 1:
-                raise RuntimeError('InitCAN failed on CAN1 at 250 kbps.')
-            if self.dll.StartCAN(self.device_type, self.device_index, self.channel) != 1:
-                raise RuntimeError('StartCAN failed on CAN1.')
+            for channel in self.channels:
+                if self.dll.InitCAN(self.device_type, self.device_index, channel, ctypes.byref(config)) != 1:
+                    raise RuntimeError(f'InitCAN failed on CAN{channel + 1} at 250 kbps.')
+                if self.dll.StartCAN(self.device_type, self.device_index, channel) != 1:
+                    raise RuntimeError(f'StartCAN failed on CAN{channel + 1}.')
         except Exception:
             self.close()
             raise
 
-    def send(self, identifier, payload):
+    def send(self, identifier, payload, channel=None, extended=True):
         frame = CAN_OBJ()
         frame.ID = identifier
         frame.SendType = 1  # Single attempt; the worker schedules bounded retries.
-        frame.ExternFlag = 1
-        frame.DataLen = 8
-        frame.Data[:] = payload
-        return self.dll.Transmit(self.device_type, self.device_index, self.channel,
+        frame.ExternFlag = int(extended)
+        frame.DataLen = len(payload)
+        frame.Data[:len(payload)] = payload
+        return self.dll.Transmit(self.device_type, self.device_index, self.channel if channel is None else channel,
                                  ctypes.byref(frame), 1) == 1
 
     def recover(self):
-        self.dll.ResetCAN(self.device_type, self.device_index, self.channel)
-        self.dll.StartCAN(self.device_type, self.device_index, self.channel)
+        for channel in self.channels:
+            self.dll.ResetCAN(self.device_type, self.device_index, channel)
+            self.dll.StartCAN(self.device_type, self.device_index, channel)
 
     def close(self):
         if self.opened:
@@ -142,26 +145,26 @@ class EngineTransmitter:
             interface = self._factory()
             interface.connect()
             connected = True
-            self._set_status('connected', 'CAN1 · 250 kbps · transmitting engine data')
-            due = {pgn: 0.0 for pgn, _, _ in ENGINE_MESSAGES}
+            self._set_status('connected', self.connected_message)
+            due = {pgn: 0.0 for pgn, _, _ in self.messages}
             pending_errors = set()
             last_recovery = time.monotonic()
             while not self._stop.is_set():
                 with self._lock:
-                    frames = engine_frames(self._values)
+                    frames = self.frames(self._values)
                 failed = False
-                for pgn, priority, period in ENGINE_MESSAGES:
+                for pgn, priority, period in self.messages:
                     now = time.monotonic()
                     if now < due[pgn]:
                         continue
                     try:
-                        sent = interface.send((priority << 26) | (pgn << 8), frames[pgn])
+                        sent = self.send_frame(interface, pgn, priority, frames[pgn])
                         if not sent:
                             raise RuntimeError('Transmit returned no sent frame')
                     except Exception as exc:
                         failed = True
                         pending_errors.add(pgn)
-                        self._set_status('retrying', f'CAN1 transmission error; retrying: {exc}')
+                        self._set_status('retrying', f'CAN transmission error; retrying: {exc}')
                         due[pgn] = now + 0.020
                     else:
                         pending_errors.discard(pgn)
@@ -173,7 +176,7 @@ class EngineTransmitter:
                         pass  # Keep attempting transmission even if recovery fails.
                     last_recovery = time.monotonic()
                 elif not pending_errors and self.status()[0] == 'retrying':
-                    self._set_status('connected', 'CAN1 · 250 kbps · transmitting engine data')
+                    self._set_status('connected', self.connected_message)
                 self._stop.wait(0.005)
         except Exception as exc:
             self._set_status('error', str(exc))
@@ -185,3 +188,11 @@ class EngineTransmitter:
                     self._set_status('error', f'CloseDevice failed: {exc}')
             if connected and self.status()[0] != 'error':
                 self._set_status('disconnected', 'Disconnected')
+    messages = ENGINE_MESSAGES
+    connected_message = 'CAN1 · 250 kbps · transmitting engine data'
+
+    def frames(self, values):
+        return engine_frames(values)
+
+    def send_frame(self, interface, key, priority, payload):
+        return interface.send((priority << 26) | (key << 8), payload)

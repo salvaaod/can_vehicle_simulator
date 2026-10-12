@@ -2,16 +2,18 @@
 
 Run `python can_vehicle_simulator.py` on Windows with the GCAN/USBCAN-II
 USB driver installed and the adapter connected. Keep `fms_can.py` and
-`ECanVci.dll` beside the simulator. The bundled DLL is **64-bit**, so use
+`crane_can.py` and `ECanVci.dll` beside the simulator. The bundled DLL is **64-bit**, so use
 64-bit Python with Tkinter. Other DLL versions must match Python's architecture.
 
 Click **Connect GCAN-II**. The first adapter (device index 0) opens and starts
 **CAN1** (driver channel index 0) at **250 kbps**, then immediately transmits
 engine data. Engine sliders update the transmitted values. The same button
 becomes **Disconnect GCAN-II**; closing the window also stops transmission and
-closes the device. CAN2, tires, and crane messages are reserved for later work.
+closes the device. CAN2 (driver channel index 1) also starts at 250 kbps and sends
+crane CANopen telemetry; see `crane_messages.md`. Tire messages remain reserved
+for later work.
 
-All messages are eight-byte extended CAN data frames. Multi-byte signals are
+All engine messages are eight-byte extended CAN data frames. Multi-byte signals are
 little-endian; unused signals are marked unavailable (`FF`). Source address is
 fixed to `00` (engine #1). This is a simulator for a test bus: it does not implement
 J1939 address claiming or a complete FMS gateway. Avoid another sender using the
@@ -45,7 +47,7 @@ running time, not an automatically advancing timer. Both use the existing compac
 engine slider style and update the engine's live parameter gauges.
 
 Transmission runs in a worker thread. Failed sends (including exceptions) are
-retried every 20 ms using current slider values. If failures persist, CAN1 is
+retried every 20 ms using current slider values. If failures persist, both channels are
 reset/restarted at most once per second to attempt recovery from bus-off. Failed
 recovery attempts do not stop the send loop. The UI shows retry status and returns
 to transmitting status after failed messages succeed. Successful DLL sends do
