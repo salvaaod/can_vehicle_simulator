@@ -1,5 +1,7 @@
 """Interactive 2D truck-mounted crane schematic. No external packages needed."""
 import math
+import time
+from operation_simulation import simulation_values
 import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
@@ -227,15 +229,20 @@ canvas.bind('<Configure>', lambda _event: draw())
 
 # Compact controls: labels and live values sit immediately before each slider.
 # The sliders are intentionally short, allowing everything to fit on one screen.
+metric_refreshers = []
+
+
 def metric_slider(parent, row, name, variable, low, high, unit='', digits=0,
                   callback=None, slider_width=125):
     ttk.Label(parent, text=name, width=17, anchor='w').grid(row=row, column=0, sticky='w', pady=2)
     readout = ttk.Label(parent, width=12, anchor='e')
     readout.grid(row=row, column=1, sticky='e', padx=(0, 5))
 
-    def changed(_value=None):
+    def changed(_value=None, redraw=True):
         value = variable.get()
         readout.configure(text=f'{value:.{digits}f} {unit}'.strip())
+        if not redraw:
+            return
         if callback:
             callback()
         else:
@@ -246,6 +253,7 @@ def metric_slider(parent, row, name, variable, low, high, unit='', digits=0,
     scale.grid(row=row, column=2, sticky='ew', padx=(0, 5))
     parent.columnconfigure(2, weight=1)
     changed()
+    metric_refreshers.append(changed)
     return changed
 
 
@@ -311,7 +319,7 @@ update_tire_p = metric_slider(tire_panel, 1, 'Pressure', wheel_pressure,
 update_tire_t = metric_slider(tire_panel, 2, 'Temperature', wheel_temperature,
                               0, 120, '°C', callback=on_tire_change)
 buttons = ttk.Frame(toolbar)
-buttons.pack(side='left', padx=(0, 12))
+buttons.grid(row=0, column=1, sticky='w', padx=(12, 0))
 ttk.Button(buttons, text='Simulate flat', command=set_flat).pack(side='left', padx=(0, 5))
 ttk.Button(buttons, text='Reset wheel', command=reset_tire).pack(side='left')
 
@@ -340,7 +348,8 @@ for col in range(3):
     controls.columnconfigure(col, weight=1)
 
 can_panel = ttk.Frame(toolbar)
-can_panel.pack(side='left', fill='x', expand=True)
+can_panel.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(4, 0))
+toolbar.columnconfigure(1, weight=1)
 can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 engine/tires + CAN2 crane · 250 kbps')
 transmitter = None
 closing = False
@@ -394,10 +403,70 @@ def poll_can():
 def close_window():
     global closing
     closing = True
+    stop_simulation()
     connect_button.configure(state='disabled')
     if transmitter is not None:
         transmitter.stop()
     # Poll for worker cleanup without blocking Tk or closing the DLL during a send.
+
+
+simulation_job = None
+simulation_started = None
+simulation_initial_hours = 300
+simulation_status = tk.StringVar(value='Manual controls')
+
+
+def stop_simulation():
+    global simulation_job, simulation_started
+    if simulation_job is not None:
+        root.after_cancel(simulation_job)
+        simulation_job = None
+    simulation_started = None
+    simulation_button.configure(text='Simulation: OFF')
+    simulation_status.set('Manual controls')
+
+
+def simulation_tick():
+    global simulation_job
+    simulation_job = None
+    if closing or simulation_started is None:
+        return
+    values, wheels, phase = simulation_values(
+        time.monotonic() - simulation_started, simulation_initial_hours)
+    for key, variable in engine.items():
+        variable.set(values[key])
+    for key, variable in [('angle', angle), ('extension', extension),
+                          ('pressure', pressure), ('slew', slew), ('load_kg', load_kg)]:
+        variable.set(values[key])
+    for name, readings in wheels.items():
+        wheel_data[name].update(readings)
+    selected = wheel_data[selected_wheel.get()]
+    wheel_pressure.set(selected['pressure'])
+    wheel_temperature.set(selected['temperature'])
+    for refresh in metric_refreshers:
+        refresh(redraw=False)
+    load_readout.configure(text=f'{load_kg.get()/1000:.1f} t')
+    simulation_status.set(f'Simulation · {phase}')
+    draw()
+    simulation_job = root.after(100, simulation_tick)
+
+
+def toggle_simulation():
+    global simulation_started, simulation_initial_hours
+    if simulation_started is not None:
+        stop_simulation()
+    elif not closing:
+        simulation_initial_hours = engine['Engine running time'].get()
+        simulation_started = time.monotonic()
+        simulation_button.configure(text='Simulation: ON')
+        simulation_tick()
+
+
+simulation_panel = ttk.Frame(toolbar)
+simulation_panel.grid(row=0, column=0, sticky='w')
+simulation_button = ttk.Button(simulation_panel, text='Simulation: OFF', command=toggle_simulation)
+simulation_button.pack(side='left', padx=(0, 12))
+ttk.Label(simulation_panel, textvariable=simulation_status).pack(side='left')
 
 
 connect_button = ttk.Button(can_panel, text='Connect GCAN-II', command=toggle_can)

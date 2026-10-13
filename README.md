@@ -50,7 +50,7 @@ On systems where Python 3 is named `python3`, use that command instead. There is
 
 The window starts with CAN disconnected. You can use all visual controls immediately without connecting hardware.
 
-**Simulate flat**, **Reset wheel**, and **Connect GCAN-II** are in the top-left toolbar, with CAN status beside them. The drawing resizes with the window, allowing a shorter window while keeping the crane, tire, and engine controls visible at the bottom.
+**Simulation: OFF/ON**, **Simulate flat**, **Reset wheel**, and **Connect GCAN-II** are in the top-left toolbar, with simulation and CAN status beside their buttons. The drawing resizes with the window, allowing a shorter window while keeping the crane, tire, and engine controls visible at the bottom.
 
 ## Using the controls
 
@@ -60,6 +60,23 @@ The window starts with CAN disconnected. You can use all visual controls immedia
 | Crane load | 0–10,000 kg in 100 kg steps | Displays a suspended load whose size changes with the selected mass. |
 | Tires | Select Rear 1, Rear 2, Front 1, or Front 2; pressure: 0–10 bar; temperature: 0–120 °C | Each wheel retains its own readings. **Simulate flat** sets the selected wheel to 1 bar; **Reset wheel** restores it to 8 bar and 35 °C. |
 | Engine | RPM: 0–4,000; oil temperature: 0–160 °C; oil pressure: 0–10 bar; coolant temperature: 0–130 °C; coolant pressure: 0–4 bar | Updates gauges and, when connected, the transmitted engine values. |
+
+### Automatic simulation
+
+Click **Simulation: OFF** to activate automatic operation. The button changes to
+**Simulation: ON**. Engine readings, vehicle speed, crane position, hydraulic
+pressure, load, and each wheel’s pressure and temperature vary continuously
+together. Blended oscillations with different periods and phases give each
+parameter smooth, organic movement. The crane continues moving while the engine
+is running and the vehicle has speed.
+Running hours accumulate from their value when simulation starts. Loads remain
+in 100 kg increments.
+
+Click the button again to stop and resume manual control at the current values.
+While simulation is active, its updates overwrite manual slider changes.
+Simulation does not connect CAN hardware automatically; if CAN is already
+connected, the existing transmitter sends the changing engine and crane readings.
+The motion is illustrative and does not model lifting capacity or vehicle dynamics.
 
 ### Connecting CAN hardware
 
