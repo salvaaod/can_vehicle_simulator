@@ -59,6 +59,23 @@ The window starts with CAN disconnected. You can use all visual controls immedia
 | Tires | Select Rear 1, Rear 2, Front 1, or Front 2; pressure: 0–10 bar; temperature: 0–120 °C | Each wheel retains its own readings. **Simulate flat** sets the selected wheel to 1 bar; **Reset wheel** restores it to 8 bar and 35 °C. |
 | Engine | RPM: 0–4,000; oil temperature: 0–160 °C; oil pressure: 0–10 bar; coolant temperature: 0–130 °C; coolant pressure: 0–4 bar | Updates gauges and, when connected, the transmitted engine values. |
 
+### Automatic simulation
+
+Click **Simulation: OFF** to activate automatic operation. The button changes to
+**Simulation: ON**. Engine readings, vehicle speed, crane position, hydraulic
+pressure, load, and each wheel’s pressure and temperature vary continuously
+together. Blended oscillations with different periods and phases give each
+parameter smooth, organic movement. The crane continues moving while the engine
+is running and the vehicle has speed.
+Running hours accumulate from their value when simulation starts. Loads remain
+in 100 kg increments.
+
+Click the button again to stop and resume manual control at the current values.
+While simulation is active, its updates overwrite manual slider changes.
+Simulation does not connect CAN hardware automatically; if CAN is already
+connected, the existing transmitter sends the changing engine and crane readings.
+The motion is illustrative and does not model lifting capacity or vehicle dynamics.
+
 ### Connecting CAN hardware
 
 1. Install the GCAN Windows driver and connect the adapter by USB.
