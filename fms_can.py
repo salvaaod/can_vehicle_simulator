@@ -1,5 +1,6 @@
 """GCAN-II CAN1 transport and J1939/FMS engine signal encoding."""
 import ctypes
+import math
 import os
 from pathlib import Path
 import threading
@@ -46,6 +47,27 @@ def engine_frames(values):
     hours[0:4] = running_time.to_bytes(4, 'little')  # SPN 247, bytes 1-4
     return {61444: bytes(eec1), 65262: bytes(et1), 65263: bytes(eflp1),
             65265: bytes(ccvs), 65253: bytes(hours)}
+
+
+TIRE_PGN = 65268
+# Side-view wheels represent the left tire on each axle, front to rear.
+TIRE_LOCATIONS = (('Front 2', 0x00), ('Front 1', 0x10),
+                  ('Rear 2', 0x20), ('Rear 1', 0x30))
+
+
+def tire_frame(location, pressure_bar):
+    """FMS TIRE1: SPN 929 location, SPN 241 pressure (4 kPa/bit)."""
+    pressure = float(pressure_bar)
+    raw = (min(250, math.floor(pressure * 25 + 0.5))
+           if math.isfinite(pressure) and pressure >= 0 else 0xFF)
+    return bytes((location, raw)) + b'\xff' * 6
+
+
+def tire_interval(value):
+    interval = float(value)
+    if not math.isfinite(interval) or interval <= 0:
+        raise ValueError('Tire interval must be a positive number of seconds')
+    return interval
 
 
 class GcanInterface:
@@ -147,6 +169,8 @@ class EngineTransmitter:
             connected = True
             self._set_status('connected', self.connected_message)
             due = {pgn: 0.0 for pgn, _, _ in self.messages}
+            last_sent = {}
+            periods = {}
             pending_errors = set()
             last_recovery = time.monotonic()
             while not self._stop.is_set():
@@ -155,6 +179,12 @@ class EngineTransmitter:
                 failed = False
                 for pgn, priority, period in self.messages:
                     now = time.monotonic()
+                    with self._lock:
+                        period = self.message_period(pgn, period, self._values)
+                    if periods.get(pgn) != period:
+                        if pgn in last_sent and pgn not in pending_errors:
+                            due[pgn] = last_sent[pgn] + period
+                        periods[pgn] = period
                     if now < due[pgn]:
                         continue
                     try:
@@ -168,7 +198,9 @@ class EngineTransmitter:
                         due[pgn] = now + 0.020
                     else:
                         pending_errors.discard(pgn)
+                        last_sent[pgn] = now
                         due[pgn] = now + period
+                        self.frame_sent(pgn)
                 if failed and time.monotonic() - last_recovery >= 1.0:
                     try:
                         interface.recover()
@@ -196,3 +228,9 @@ class EngineTransmitter:
 
     def send_frame(self, interface, key, priority, payload):
         return interface.send((priority << 26) | (key << 8), payload)
+
+    def message_period(self, key, default, values):
+        return default
+
+    def frame_sent(self, key):
+        pass

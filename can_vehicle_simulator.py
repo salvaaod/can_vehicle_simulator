@@ -3,6 +3,7 @@ import math
 import tkinter as tk
 from tkinter import ttk
 from crane_can import VehicleTransmitter
+from fms_can import tire_interval
 
 WIDTH, HEIGHT = 1000, 540
 GROUND_Y = 415
@@ -35,6 +36,8 @@ selected_wheel = tk.StringVar(value=wheel_names[0])
 wheel_pressure = tk.DoubleVar(value=8.0)
 wheel_temperature = tk.DoubleVar(value=35.0)
 changing_selection = False
+tire_send_seconds = tk.StringVar(value='10')
+last_tire_interval = 10.0
 
 canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#e9f2fa', highlightthickness=0)
 # Keep the drawing area at its designed height; do not expand into spare space.
@@ -293,6 +296,13 @@ buttons.grid(row=3, column=0, columnspan=3, sticky='w', pady=(5, 0))
 ttk.Button(buttons, text='Simulate flat', command=set_flat).pack(side='left', padx=(0, 5))
 ttk.Button(buttons, text='Reset wheel', command=reset_tire).pack(side='left')
 
+ttk.Label(tire_panel, text='Send interval (sec)').grid(row=4, column=0, sticky='w', pady=(6, 0))
+interval_input = ttk.Spinbox(tire_panel, from_=0.1, to=3600, increment=1,
+                             textvariable=tire_send_seconds, width=9)
+interval_input.grid(row=4, column=1, columnspan=2, sticky='w', pady=(6, 0))
+interval_hint = ttk.Label(tire_panel, text='One tire per interval · CAN1', foreground='#526579')
+interval_hint.grid(row=5, column=0, columnspan=3, sticky='w', pady=(3, 0))
+
 engine_panel = ttk.LabelFrame(controls, text='Engine', padding=7)
 engine_panel.grid(row=0, column=2, sticky='nsew', padx=4)
 for row, (key, lo, hi, unit, digits) in enumerate([
@@ -312,15 +322,24 @@ for col in range(3):
 
 can_panel = ttk.Frame(root, padding=(14, 0, 14, 10))
 can_panel.pack(fill='x')
-can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 engine + CAN2 crane · 250 kbps')
+can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 engine/tires + CAN2 crane · 250 kbps')
 transmitter = None
 closing = False
 
 
 def engine_snapshot():
+    global last_tire_interval
+    try:
+        last_tire_interval = tire_interval(tire_send_seconds.get())
+        interval_hint.configure(text='One tire per interval · CAN1', foreground='#526579')
+    except ValueError:
+        interval_hint.configure(text=f'Enter seconds > 0; using {last_tire_interval:g} sec',
+                                foreground='#bd3030')
     return {**{key: variable.get() for key, variable in engine.items()},
             'angle': angle.get(), 'extension': extension.get(),
-            'pressure': pressure.get(), 'slew': slew.get(), 'load_kg': load_kg.get()}
+            'pressure': pressure.get(), 'slew': slew.get(), 'load_kg': load_kg.get(),
+            'wheels': {name: dict(readings) for name, readings in wheel_data.items()},
+            'tire_interval': last_tire_interval}
 
 
 def toggle_can():

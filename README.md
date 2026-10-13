@@ -71,12 +71,13 @@ The implementation selects the first adapter (device index `0`), CAN1 (channel i
 
 ## CAN messages
 
-Only engine telemetry is transmitted. Crane and tire controls affect the visual simulator; CAN2, crane messages, and tire messages are not implemented.
+Engine telemetry and FMS TIRE1 tire pressure transmit on CAN1; crane CANopen telemetry transmits on CAN2. Both channels use 250 kbps. Tire pressure sends one wheel at a time in rotation. The Tires panel has a **Send interval (sec)** numeric input defaulting to **10** seconds per tire, adjustable while connected. Temperature remains a visual control. See [crane_messages.md](crane_messages.md) for crane telemetry and [FMS_CAN.md](FMS_CAN.md) for tire location mapping.
 
 | Message | PGN | CAN identifier | Nominal interval | Encoded readings |
 | --- | --- | --- | --- | --- |
 | EEC1 | 61444 (`F004`) | `0CF00400` | 20 ms | Engine speed, SPN 190 |
 | ET1 | 65262 (`FEEE`) | `18FEEE00` | 1,000 ms | Coolant temperature, SPN 110; oil temperature, SPN 175 |
+| TIRE1 | 65268 (`FEF4`) | `18FEF400` | Adjustable, default 10 sec per tire | Tire location, SPN 929; pressure, SPN 241 |
 | EFL/P1 | 65263 (`FEEF`) | `18FEEF00` | 500 ms | Oil pressure, SPN 100; coolant pressure, SPN 109 |
 
 Each message has an eight-byte payload. Multi-byte signals use little-endian encoding, unsupported signals remain `FF` (not available), and the source address is fixed to `00` (engine #1). Engine speed and coolant temperature are FMS signals; the other readings are supplementary J1939 telemetry that an FMS-only receiver may ignore.

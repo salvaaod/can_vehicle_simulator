@@ -2,7 +2,9 @@
 import math
 import struct
 
-from fms_can import ENGINE_MESSAGES, EngineTransmitter, GcanInterface, engine_frames
+from fms_can import (ENGINE_MESSAGES, EngineTransmitter, GcanInterface,
+                     engine_frames, TIRE_PGN, TIRE_LOCATIONS, tire_frame,
+                     tire_interval)
 
 NODE_ID = 1
 CRANE_MESSAGES = ((0x180 + NODE_ID, None, 0.100),
@@ -35,13 +37,30 @@ class VehicleInterface(GcanInterface):
 
 class VehicleTransmitter(EngineTransmitter):
     messages = ENGINE_MESSAGES + CRANE_MESSAGES
-    connected_message = 'CAN1 engine + CAN2 crane · 250 kbps · transmitting'
+    connected_message = 'CAN1 engine/tires + CAN2 crane · 250 kbps · transmitting'
 
     def __init__(self, values, interface_factory=VehicleInterface):
+        self._tire_index = 0
+        if 'wheels' in values:
+            tire_interval(values.get('tire_interval', 10))
+            self.messages = self.messages + ((TIRE_PGN, 6, 10.0),)
         super().__init__(values, interface_factory)
 
     def frames(self, values):
-        return {**engine_frames(values), **crane_frames(values)}
+        frames = {**engine_frames(values), **crane_frames(values)}
+        if 'wheels' in values:
+            name, location = TIRE_LOCATIONS[self._tire_index]
+            frames[TIRE_PGN] = tire_frame(location, values['wheels'][name]['pressure'])
+        return frames
+
+    def message_period(self, key, default, values):
+        if key == TIRE_PGN:
+            return tire_interval(values.get('tire_interval', 10))
+        return default
+
+    def frame_sent(self, key):
+        if key == TIRE_PGN:
+            self._tire_index = (self._tire_index + 1) % len(TIRE_LOCATIONS)
 
     def send_frame(self, interface, key, priority, payload):
         if priority is None:

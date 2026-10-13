@@ -10,8 +10,8 @@ Click **Connect GCAN-II**. The first adapter (device index 0) opens and starts
 engine data. Engine sliders update the transmitted values. The same button
 becomes **Disconnect GCAN-II**; closing the window also stops transmission and
 closes the device. CAN2 (driver channel index 1) also starts at 250 kbps and sends
-crane CANopen telemetry; see `crane_messages.md`. Tire messages remain reserved
-for later work.
+crane CANopen telemetry; see `crane_messages.md`. CAN1 also sends FMS TIRE1
+tire pressure, rotating through one wheel per configurable interval.
 
 All engine messages are eight-byte extended CAN data frames. Multi-byte signals are
 little-endian; unused signals are marked unavailable (`FF`). Source address is
@@ -25,6 +25,7 @@ same source address on that bus.
 | ET1 | 65262 (`FEEE`) | `18FEEE00` | 1000 ms | Coolant temperature, SPN 110, byte 1, 1 °C/bit, offset −40 °C; oil temperature, SPN 175, bytes 3–4, 0.03125 °C/bit, offset −273 °C |
 | EFL/P1 | 65263 (`FEEF`) | `18FEEF00` | 500 ms | Oil pressure, SPN 100, byte 4, 4 kPa/bit; coolant pressure, SPN 109, byte 7, 2 kPa/bit |
 | CCVS | 65265 (`FEF1`) | `18FEF100` | 100 ms | Wheel based speed, SPN 84, bytes 2–3, 1/256 km/h/bit |
+| TIRE1 | 65268 (`FEF4`) | `18FEF400` | 10 seconds per tire by default, adjustable | Tire location, SPN 929, byte 1; pressure, SPN 241, byte 2, 4 kPa/bit, zero offset |
 | HOURS | 65253 (`FEE5`) | `18FEE500` | 1000 ms | Engine total hours of operation, SPN 247, bytes 1–4, 0.05 h/bit |
 
 Engine speed, coolant temperature, wheel based speed, and engine running time
@@ -67,3 +68,29 @@ Tests cover reference payloads, slider limits, DLL structure layouts, channel an
 frame configuration, connection cleanup, continued retries/recovery failures,
 live value updates, and shutdown using a simulated driver. Physical GCAN/CAN
 validation must be performed on Windows with the adapter and a CAN receiver.
+
+## Tire pressure (FMS TIRE1)
+
+The **Send interval (sec)** numeric input in the Tires panel starts at **10**.
+It accepts positive seconds, including decimals, and changes the schedule while
+connected. Invalid/empty input retains the last valid interval and shows a hint.
+The first tire sends immediately on connection; subsequent successful sends
+rotate one tire per interval. At 10 seconds, each of the four tires repeats every
+40 seconds. Failed sends retry the same tire every 20 ms using its current
+pressure, advancing only after success.
+
+The side-view drawing represents four axle positions. Location's high nibble
+counts axles from front to rear; the low nibble is 0 (leftmost tire on each axle):
+
+| Rotation | Wheel | Location byte |
+| --- | --- | --- |
+| 1 | Front 2 | `00` |
+| 2 | Front 1 | `10` |
+| 3 | Rear 2 | `20` |
+| 4 | Rear 1 | `30` |
+
+Pressure is converted from bar to kPa and divided by 4, rounded to the nearest
+bit (half up). Thus 8 bar encodes as `C8`, and the first default payload is
+`00 C8 FF FF FF FF FF FF`. Bytes 3–8 are unused in FMS and stay `FF`;
+temperature remains a visual control. The frame is extended, priority 6,
+source address `00`, on CAN1 at 250 kbps.
