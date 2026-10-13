@@ -50,6 +50,8 @@ On systems where Python 3 is named `python3`, use that command instead. There is
 
 The window starts with CAN disconnected. You can use all visual controls immediately without connecting hardware.
 
+**Simulation: OFF/ON** and **Connect GCAN-II** sit inside the drawing's top-left area, with their status labels beside them. **Simulate flat** and **Reset wheel** are in the Tires panel beside the wheel controls. The drawing resizes with the window, allowing a shorter window while keeping the crane, tire, and engine controls visible at the bottom.
+
 ## Using the controls
 
 | Panel | Controls | Behavior |
