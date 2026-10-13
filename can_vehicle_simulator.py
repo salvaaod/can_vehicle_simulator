@@ -42,12 +42,16 @@ changing_selection = False
 tire_send_seconds = tk.StringVar(value='10')
 last_tire_interval = 10.0
 
-toolbar = ttk.Frame(root, padding=(14, 8, 14, 3))
-toolbar.pack(fill='x')
-
 canvas = tk.Canvas(root, width=WIDTH, height=420, bg='#e9f2fa', highlightthickness=0)
 # Give spare height to the drawing, keeping the bottom controls visible.
 canvas.pack(padx=12, pady=(5, 5), fill='both', expand=True)
+
+# Keep the main actions inside the schematic, without a separate toolbar row.
+style = ttk.Style(root)
+style.configure('Drawing.TFrame', background='#e9f2fa')
+style.configure('Drawing.TLabel', background='#e9f2fa')
+toolbar = ttk.Frame(canvas, style='Drawing.TFrame')
+toolbar.place(x=25, y=45)
 
 controls = ttk.Frame(root, padding=(10, 3, 10, 8))
 controls.pack(fill='x')
@@ -318,17 +322,17 @@ update_tire_p = metric_slider(tire_panel, 1, 'Pressure', wheel_pressure,
                               0, 10, 'bar', digits=1, callback=on_tire_change)
 update_tire_t = metric_slider(tire_panel, 2, 'Temperature', wheel_temperature,
                               0, 120, '°C', callback=on_tire_change)
-buttons = ttk.Frame(toolbar)
-buttons.grid(row=0, column=1, sticky='w', padx=(12, 0))
+buttons = ttk.Frame(tire_panel)
+buttons.grid(row=3, column=0, columnspan=3, sticky='w', pady=(5, 0))
 ttk.Button(buttons, text='Simulate flat', command=set_flat).pack(side='left', padx=(0, 5))
 ttk.Button(buttons, text='Reset wheel', command=reset_tire).pack(side='left')
 
-ttk.Label(tire_panel, text='Send interval (sec)').grid(row=3, column=0, sticky='w', pady=(6, 0))
+ttk.Label(tire_panel, text='Send interval (sec)').grid(row=4, column=0, sticky='w', pady=(6, 0))
 interval_input = ttk.Spinbox(tire_panel, from_=0.1, to=3600, increment=1,
                              textvariable=tire_send_seconds, width=9)
-interval_input.grid(row=3, column=1, columnspan=2, sticky='w', pady=(6, 0))
+interval_input.grid(row=4, column=1, columnspan=2, sticky='w', pady=(6, 0))
 interval_hint = ttk.Label(tire_panel, text='One tire per interval · CAN1', foreground='#526579')
-interval_hint.grid(row=4, column=0, columnspan=3, sticky='w', pady=(3, 0))
+interval_hint.grid(row=5, column=0, columnspan=3, sticky='w', pady=(3, 0))
 
 engine_panel = ttk.LabelFrame(controls, text='Engine', padding=7)
 engine_panel.grid(row=0, column=2, sticky='nsew', padx=4)
@@ -347,9 +351,8 @@ for row, (key, lo, hi, unit, digits) in enumerate([
 for col in range(3):
     controls.columnconfigure(col, weight=1)
 
-can_panel = ttk.Frame(toolbar)
-can_panel.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(4, 0))
-toolbar.columnconfigure(1, weight=1)
+can_panel = ttk.Frame(toolbar, style='Drawing.TFrame')
+can_panel.grid(row=1, column=0, sticky='w', pady=(4, 0))
 can_status = tk.StringVar(value='Disconnected · GCAN-II CAN1 engine/tires + CAN2 crane · 250 kbps')
 transmitter = None
 closing = False
@@ -462,19 +465,18 @@ def toggle_simulation():
         simulation_tick()
 
 
-simulation_panel = ttk.Frame(toolbar)
+simulation_panel = ttk.Frame(toolbar, style='Drawing.TFrame')
 simulation_panel.grid(row=0, column=0, sticky='w')
 simulation_button = ttk.Button(simulation_panel, text='Simulation: OFF', command=toggle_simulation)
 simulation_button.pack(side='left', padx=(0, 12))
-ttk.Label(simulation_panel, textvariable=simulation_status).pack(side='left')
+ttk.Label(simulation_panel, textvariable=simulation_status, style='Drawing.TLabel').pack(side='left')
 
 
 connect_button = ttk.Button(can_panel, text='Connect GCAN-II', command=toggle_can)
 connect_button.pack(side='left', padx=(0, 12))
-status_label = ttk.Label(can_panel, textvariable=can_status, wraplength=650)
+status_label = ttk.Label(can_panel, textvariable=can_status, wraplength=300,
+                         style='Drawing.TLabel')
 status_label.pack(side='left', fill='x', expand=True)
-can_panel.bind('<Configure>', lambda event: status_label.configure(
-    wraplength=max(100, event.width - connect_button.winfo_reqwidth() - 12)))
 root.protocol('WM_DELETE_WINDOW', close_window)
 root.after(50, poll_can)
 
